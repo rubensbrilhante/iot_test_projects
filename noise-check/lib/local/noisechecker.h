@@ -4,12 +4,14 @@
 #include "Arduino.h"
 #include "OutputSensor.h"
 #include "InputSensor.h"
+#include "ThingSpeakClient.h"
 
-const int TOO_QUIET = 3;
-const int TOO_NOISE = 2;
-const int NOISE = 1;
-const int QUIET = 0;
-const long TOO_MUCH = 5 * 1000;
+enum State {
+  ON_NOISE,
+  ON_QUIET,
+};
+
+const long TRESHOLD = 2 * 1000;
 
 class NoiseChecker
 {
@@ -18,11 +20,18 @@ class NoiseChecker
     {
       _soundSensor = s;
       _light = l;
-      _state = TOO_QUIET;
+      _state = ON_QUIET;
+      _updateState = ON_QUIET;
+      _enabled = true;
+    }
+    inline void setEnabled(bool enable)
+    {
+      _enabled = enable;
     }
     void setup();
     void update(long delta);
-    void doAction();
+    void doAction(ThingSpeakClient* client);
+
   protected:
     void decidePower(int delta);
     void decideState(long delta);
@@ -31,7 +40,9 @@ class NoiseChecker
     OutputSensor* _light;
     long _timeOnNoise;
     long _timeOnQuiet;
-    int _state;
+    State _state;
+    State _updateState;
+    bool _enabled;
 };
 
 

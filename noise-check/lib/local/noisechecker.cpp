@@ -1,5 +1,6 @@
 #include "Arduino.h"
 #include "NoiseChecker.h"
+#include "ThingSpeakClient.h"
 
 void NoiseChecker::setup()
 {
@@ -7,74 +8,65 @@ void NoiseChecker::setup()
   _light->setup();
 }
 
-void NoiseChecker::doAction()
+void NoiseChecker::doAction(ThingSpeakClient* client)
 {
-  if (_state == TOO_NOISE || _state == QUIET)
-  {
-    _light->dWrite(HIGH);
-  }
-  else
-  {
-    _light->dWrite(LOW);
+  if (!_enabled) return;
+  switch (_updateState) {
+    case ON_NOISE:
+      if (_state == ON_QUIET)
+      {
+        Serial.println("*********************************************** ");
+        _light->dWrite(HIGH);
+        _state = ON_NOISE;
+        Serial.println("NOISE");
+        client->send("field1=1");
+      }
+      break;
+    case ON_QUIET:
+      if (_state == ON_NOISE)
+      {
+        Serial.println("*********************************************** ");
+        _light->dWrite(LOW);
+        _state = ON_QUIET;
+        Serial.println("QUIET");
+        client->send("field1=0");
+      }
+      break;
   }
 }
 
 void NoiseChecker::update(long delta)
 {
-  decidePower(delta);
-  decideState(delta);
-  switch (_state) {
-    case NOISE:
-      _timeOnNoise += delta;
-      Serial.println("NOISE");
-      break;
-    case QUIET:
-      _timeOnQuiet += delta;
-      Serial.println("QUIET");
-      break;
-    case TOO_NOISE:
-      _timeOnQuiet = 0;
-      Serial.println("TOO_NOISE");
-      break;
-    case TOO_QUIET:
-      _timeOnNoise = 0;
-      Serial.println("TOO_QUIET");
-      break;
-  }
+  int value = _soundSensor->dRead();
+  Serial.print("Sensor: ");
+  Serial.println(value);
+  // if (!_enabled) return;
+  // int value = _soundSensor->dRead();
+  // if (value == 0)
+  // {
+  //   _timeOnNoise += delta;
+  // }
+  // else
+  // {
+  //   _timeOnQuiet += delta;
+  // }
+  // decidePower(delta);
+  // decideState(delta);
 }
 
 void NoiseChecker::decideState(long delta)
 {
-  int value = _soundSensor->dRead();
-  Serial.print("Read ");
-  Serial.println(value);
-  Serial.print("State ");
-  Serial.println(_state);
-  Serial.print("Noise ");
-  Serial.println(_timeOnNoise);
-  Serial.print("Quiet ");
-  Serial.println(_timeOnQuiet);
-
-  if (value == 0) {
-    if (_timeOnNoise > TOO_MUCH)
-    {
-      _state = TOO_NOISE;
-    }
-    else
-    {
-      _state = NOISE;
-    }
-  }
-  else
+  if (_timeOnNoise > TRESHOLD)
   {
-    if (_timeOnQuiet > TOO_MUCH)
-    {
-      _state = TOO_QUIET;
-    }
-    else
-    {
-      _state = QUIET;
-    }
+    _updateState = ON_NOISE;
+    _timeOnNoise = 0;
+    _timeOnQuiet = 0;
+  }
+  else if ( _timeOnQuiet > TRESHOLD)
+  {
+    _updateState = ON_QUIET;
+    _timeOnNoise = 0;
+    _timeOnQuiet = 0;
   }
 }
 

@@ -1,153 +1,106 @@
-//Definicao pinos leds
-const int RED = 5;
-const int GREEN = 6;
-const int BLUE = 3;
+#include <ESP8266WiFi.h>
 
-const long DELAY_R = 5000l;
-const long DELAY_G = 10000l;
-const long DELAY_B = 15000l;
+int value = LOW;
+char* ssid     = "IAiOT";
+char* password = "IA#iot@2017";
 
-const int FADE_IN = 0;
-const int FADE_OUT = 1;
+int ledPin = 4; // GPIO13
+WiFiServer server(80);
 
-long timeR = DELAY_R;
-long timeG = DELAY_G;
-long timeB = DELAY_B;
+void setup() {
+  Serial.begin(115200);
+  delay(10);
 
-int stateR = FADE_IN;
-int stateG = FADE_IN;
-int stateB = FADE_IN;
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW);
 
-float powerR = 0;
-float powerG = 0;
-float powerB = 0;
+  // Connect to WiFi network
+  Serial.println();
+  Serial.println();
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
 
-long timeOnStateR = 0;
-long timeOnStateG = 0;
-long timeOnStateB = 0;
+  WiFi.begin(ssid, password);
 
-void decideState(long delta, long &timeOnState, long delay, int &actualState)
-{
-  long totalTime = timeOnState + delta;
-  Serial.print("total time ");
-  Serial.println(totalTime, DEC);
-  if (totalTime > delay)
-  {
-    actualState = (actualState + 1) % 2;
-    timeOnState = totalTime - delay;
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
   }
-  Serial.print("state ");
-  Serial.println(actualState, DEC);
-  Serial.print("timeonstate ");
-  Serial.println(timeOnState, DEC);
+  Serial.println("");
+  Serial.println("WiFi connected");
+
+  // Start the server
+  server.begin();
+  Serial.println("Server started");
+
+  // Print the IP address
+  Serial.print("Use this URL to connect: ");
+  Serial.print("http://");
+  Serial.print(WiFi.localIP());
+  Serial.println("/");
+
 }
 
-void decidePower(float &power, int state, long delay, int delta)
-{
-  // float percent = (power/255.f) * delay;
-  float deltaPercent = (((float)delta) / delay) * 255;
+void loop() {
+  // Check if a client has connected
+  WiFiClient client = server.available();
 
-  // Serial.print("percent ");
-  // Serial.println(percent);
-  // Serial.print("deltaPercent ");
-  // Serial.println(deltaPercent);
-  //
-  // if (state == FADE_OUT)
-  // {
-  //   deltaPercent *= -1;
-  // }
-  // power += deltaPercent;
-  // if (power < 0)
-  // {
-  //   power = 0;
-  // } else if (power > 255)
-  // {
-  //   power = 255;
-  // }
-  // Serial.print("power ");
-  // Serial.println(power, DEC);
-  if (state == FADE_OUT)
-  {
-    power = 255;
+  if (value == HIGH) {
+    digitalWrite(4, HIGH);
+    delay(2);
+    digitalWrite(4, LOW);
+    delay(2);
   }
-  else
-  {
-    power = 0;
+
+  if (!client) {
+    return;
   }
-}
 
-long currentTime;
-long newTime;
-long delta;
+  // Wait until the client sends some data
+  Serial.println("new client");
+  while(!client.available()){
+    delay(1);
+  }
 
-void setup()
-{
-  Serial.begin(9600);
-  //Define pinos led como saida
-  pinMode(RED, OUTPUT);
-  pinMode(GREEN, OUTPUT);
-  pinMode(BLUE, OUTPUT);
-  currentTime = millis();
-}
+  // Read the first line of the request
+  String request = client.readStringUntil('\r');
+  Serial.println(request);
+  client.flush();
 
-void loop()
-{
-  newTime = millis();
-  delta = newTime - currentTime;
+  // Match the request
+  if (request.indexOf("/LED=ON") != -1)  {
+    //digitalWrite(ledPin, HIGH);
+    value = HIGH;
+  }
+  if (request.indexOf("/LED=OFF") != -1)  {
+    digitalWrite(ledPin, LOW);
+    value = LOW;
+  }
 
-  currentTime = newTime;
+// Set ledPin according to the request
+//digitalWrite(ledPin, value);
 
-  Serial.print("delta ");
-  Serial.println(delta, DEC);
+  // Return the response
+  client.println("HTTP/1.1 200 OK");
+  client.println("Content-Type: text/html");
+  client.println(""); //  do not forget this one
+  client.println("<!DOCTYPE HTML>");
+  client.println("<html>");
 
-  timeOnStateR += delta;
-  timeOnStateG += delta;
-  timeOnStateB += delta;
+  client.print("Led pin is now: ");
 
-  Serial.println("RED");
-  decideState(delta, timeOnStateR, DELAY_R, stateR);
-  decidePower(powerR, stateR, DELAY_R, delta);
-  analogWrite(RED, (int)powerR);
-  Serial.println("GREEN");
-  decideState(delta, timeOnStateG, DELAY_G, stateG);
-  decidePower(powerG, stateG, DELAY_G, delta);
-  analogWrite(GREEN, (int)powerG);
-  Serial.println("BLUE");
-  decideState(delta, timeOnStateB, DELAY_B, stateB);
-  decidePower(powerB, stateB, DELAY_B, delta);
-  analogWrite(BLUE, (int)powerB);
+  if(value == HIGH) {
+    client.print("On");
+  } else {
+    client.print("Off");
+  }
+  client.println("<br><br>");
+  client.println("<a href=\"/LED=ON\"\"><button>Turn On </button></a>");
+  client.println("<a href=\"/LED=OFF\"\"><button>Turn Off </button></a><br />");
+  client.println("</html>");
 
-  // digitalWrite(13, HIGH);
-  // index++;
-  // Serial.print("Saida: ");
-  // Serial.println(index, DEC);
-  // //Intensidade baixa
-  // if (index % 3 == 0)
-  // {
-  //   Serial.println("VERDE");
-  //   digitalWrite(BLUE, HIGH);
-  //   digitalWrite(VERM, HIGH);
-  //   fadeIn(VERD);
-  //   fadeOut(VERD);
-  // } else if (index % 3 == 1)
-  // {
-  //   Serial.println("AZUL");
-  //   digitalWrite(VERD, HIGH);
-  //   digitalWrite(VERM, HIGH);
-  //   fadeIn(BLUE);
-  //   fadeOut(BLUE);
-  // } else
-  // {
-  //   Serial.println("VERMELHO");
-  //   digitalWrite(VERD, HIGH);
-  //   digitalWrite(BLUE, HIGH);
-  //   fadeIn(VERM);
-  //   fadeOut(VERM);
-  // }
-  // delay(1000);
-  // // //Apaga todos os leds
-  // digitalWrite(VERD, HIGH);
-  // digitalWrite(BLUE, HIGH);
-  // digitalWrite(VERM, HIGH);
-  // delay(1000);
+  delay(1);
+  Serial.println("Client disonnected");
+  Serial.println("");
+
 }
